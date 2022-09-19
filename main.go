@@ -8,32 +8,40 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 )
 
-func GoCounter(user_url string, out_chan chan map[string]int) {
-	if _, err := url.ParseRequestURI(user_url); err != nil {
-		out_chan <- map[string]int{user_url: 0}
+func GoCounter(user_url string, total_count *int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	go_count := 0
+	if _, err := url.Parse(user_url); err != nil {
+		fmt.Printf("Count of \"Go\" in %s = %d\n", user_url, go_count)
 		return
 	}
 	resp, err := http.Get(user_url)
 	if err != nil {
-		out_chan <- map[string]int{user_url: 0}
+		fmt.Printf("Count of \"Go\" in %s = %d\n", user_url, go_count)
 		return
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		out_chan <- map[string]int{user_url: 0}
+		fmt.Printf("Count of \"Go\" in %s = %d\n", user_url, go_count)
 		return
 	}
-	out_chan <- map[string]int{user_url: strings.Count(string(body), "Go")}
+	go_count = strings.Count(string(body), "Go")
+	*total_count += go_count
+	fmt.Printf("Count of \"Go\" in %s = %d\n", user_url, go_count)
 }
 
 func main() {
-	output := make(chan map[string]int)
+	var wg sync.WaitGroup
 	var path_to_file string
-	flag.StringVar(&path_to_file, "path", "./test_urls.txt", "")
+	total_count := 0
+
+	flag.StringVar(&path_to_file, "path", "./urls.txt", "")
 	flag.Parse()
 
 	f, err := os.Open(path_to_file)
@@ -42,22 +50,18 @@ func main() {
 		os.Exit(-1)
 	}
 	defer f.Close()
-	var lines []string
+	var urls []string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+		urls = append(urls, scanner.Text())
 	}
-
-	for _, line := range lines {
-		go GoCounter(line, output)
-	}
-
-	total_count := 0
-	for val := range output {
-		for k, v := range val {
-			fmt.Printf("Count of Go for %s = %d\n", k, v)
-			total_count += v
+	for _, url := range urls {
+		if runtime.NumGoroutine() > 6 {
+			wg.Wait()
 		}
+		wg.Add(1)
+		go GoCounter(url, &total_count, &wg)
 	}
-	fmt.Printf("Total count: %d", total_count)
+	wg.Wait()
+	fmt.Printf("Total count of \"Go\": %d\n", total_count)
 }
