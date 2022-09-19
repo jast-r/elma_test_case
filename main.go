@@ -56,7 +56,8 @@ func main() {
 		urls = append(urls, scanner.Text())
 	}
 	for _, url := range urls {
-		if runtime.NumGoroutine() > 6 {
+		// больше 7, т.к. основной поток тоже считается за горутину
+		if runtime.NumGoroutine() > 7 {
 			wg.Wait()
 		}
 		wg.Add(1)
