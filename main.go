@@ -13,7 +13,7 @@ import (
 	"sync"
 )
 
-func GoCounter(user_url string, total_count *int, wg *sync.WaitGroup) {
+func GoCounter(user_url string, total_count *int, wg *sync.WaitGroup, mutex *sync.Mutex) {
 	defer wg.Done()
 	go_count := 0
 	if _, err := url.Parse(user_url); err != nil {
@@ -32,13 +32,16 @@ func GoCounter(user_url string, total_count *int, wg *sync.WaitGroup) {
 		return
 	}
 	go_count = strings.Count(string(body), "Go")
+	mutex.Lock()
 	*total_count += go_count
+	mutex.Unlock()
 	fmt.Printf("Count of \"Go\" in %s = %d\n", user_url, go_count)
 }
 
 func main() {
 	var wg sync.WaitGroup
 	var path_to_file string
+	var mutex sync.Mutex
 	total_count := 0
 
 	flag.StringVar(&path_to_file, "path", "./urls.txt", "")
@@ -61,7 +64,7 @@ func main() {
 			wg.Wait()
 		}
 		wg.Add(1)
-		go GoCounter(url, &total_count, &wg)
+		go GoCounter(url, &total_count, &wg, &mutex)
 	}
 	wg.Wait()
 	fmt.Printf("Total count of \"Go\": %d\n", total_count)
